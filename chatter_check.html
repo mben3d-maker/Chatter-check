@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e1416">
+<title>Chatter Check</title>
+<style>
+/* Instrument-panel layout: one column on a phone, spectrum on top, setup + results below. Single dark theme on purpose (shop floor, scope-style display). */
+:root{
+  color-scheme: dark;
+  --bg:#0e1416; --panel:#162024; --panel2:#1c282d; --line:#2b393f; --fg:#e4eef0; --muted:#8ea2a7;
+  --trace:#46d0c0; --hold:#2a7f77; --accent:#f2a93b; --bad:#ff6b5b; --ok:#5bd68a; --tp:#7f98ff;
+  --mono: "Roboto Mono", ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  padding-top: env(safe-area-inset-top,0px); padding-bottom: env(safe-area-inset-bottom,0px);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+.wrap>*{min-width:0}
+html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:15px/1.4 var(--sans);
+  padding-left:max(14px,env(safe-area-inset-left,0px));padding-right:max(14px,env(safe-area-inset-right,0px));padding-block:10px 80px}
+.wrap{max-width:760px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:8px;flex-wrap:wrap}
+h1{font-size:20px;margin:0;letter-spacing:.02em}
+h1 span{color:var(--accent)}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 8px;font-weight:600}
+.status{font:12px var(--mono);color:var(--muted)}
+.status.live{color:var(--ok)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button,select,input{font:inherit;color:var(--fg)}
+button{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px 14px;min-height:44px;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:#1b1305;border-color:var(--accent);font-weight:700;flex:1 1 140px}
+button.primary.stop{background:var(--bad);border-color:var(--bad);color:#fff}
+button.small{min-height:34px;padding:6px 10px;font-size:13px}
+button.on{border-color:var(--trace);color:var(--trace)}
+button:disabled{opacity:.45}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{min-height:32px;padding:4px 10px;font-size:13px;border-radius:16px}
+.chip.on{background:var(--trace);color:#06201d;border-color:var(--trace);font-weight:700}
+canvas{width:100%;height:240px;display:block;background:#0a0f10;border-radius:8px;border:1px solid var(--line);touch-action:manipulation}
+.hint{font-size:12px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+input,select{background:#0b1113;border:1px solid var(--line);border-radius:7px;padding:9px;min-height:42px;width:100%;font-family:var(--mono)}
+select{font-family:var(--sans)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px}
+.kv b{font:600 15px var(--mono);font-variant-numeric:tabular-nums}
+.kv span{color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+td,th{padding:7px 6px;border-bottom:1px solid var(--line);text-align:left}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.pk{cursor:pointer}
+tr.pk.sel td{background:#22323a}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:10px;letter-spacing:.03em;white-space:nowrap}
+.t-ch{background:rgba(255,107,91,.18);color:var(--bad)}
+.t-tp{background:rgba(127,152,255,.18);color:var(--tp)}
+.t-sp{background:rgba(242,169,59,.16);color:var(--accent)}
+.t-bl{background:rgba(142,162,167,.18);color:var(--muted)}
+.verdict{font-weight:700;font-size:16px;padding:8px 10px;border-radius:8px;margin-bottom:8px}
+.v-ok{background:rgba(91,214,138,.13);color:var(--ok)}
+.v-bad{background:rgba(255,107,91,.14);color:var(--bad)}
+.v-warn{background:rgba(242,169,59,.14);color:var(--accent)}
+.v-none{background:var(--panel2);color:var(--muted)}
+.sugg td:first-child{font-weight:700}
+.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--panel);border-top:1px solid var(--line);
+  padding:6px max(14px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(14px,env(safe-area-inset-left,0px));gap:6px;z-index:5}
+.tabs button{flex:1;min-height:44px}
+.tabs button.on{background:var(--panel2);border-color:var(--accent);color:var(--accent);font-weight:700}
+.scroll{overflow-x:auto}
+details summary{cursor:pointer;color:var(--muted);font-size:13px}
+details p,details li{font-size:13px;color:var(--fg)}
+.msg{font-size:13px;padding:8px 10px;border-radius:8px;background:var(--panel2);color:var(--muted)}
+.msg.err{color:var(--bad)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Chatter <span>Check</span></h1>
+    <div class="status" id="status">mic off</div>
+  </header>
+
+  <!-- ===================== LISTEN ===================== -->
+  <section id="v-listen" class="wrap">
+    <div class="card">
+      <div class="row" style="margin-bottom:10px">
+        <button class="primary" id="btnListen">Listen</button>
+        <button id="btnFreeze" disabled>Freeze</button>
+        <button id="btnReset">Reset hold</button>
+      </div>
+      <canvas id="spec" aria-label="Frequency spectrum"></canvas>
+      <div class="row" style="margin-top:8px;justify-content:space-between">
+        <div class="chips" id="range">
+          <button class="chip" data-r="2000">2 kHz</button>
+          <button class="chip on" data-r="5000">5 kHz</button>
+          <button class="chip" data-r="10000">10 kHz</button>
+          <button class="chip" data-r="20000">20 kHz</button>
+        </div>
+        <div class="row">
+          <button class="small on" id="btnHold">Peak hold</button>
+          <button class="small" id="btnBase">Save baseline</button>
+        </div>
+      </div>
+      <p class="hint" id="baseInfo" style="margin:6px 0 0">Blue dashed lines = tooth-pass frequency and its multiples. Tap a peak below to check it.</p>
+    </div>
+
+    <div class="card">
+      <h2>Peaks</h2>
+      <div class="scroll">
+        <table id="peaks"><thead><tr><th>Hz</th><th>dB</th><th>× tooth-pass</th><th>What it is</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="msg" id="peakMsg">Tap Listen and hold the phone near the machine during the cut, or tap Demo to see how it works.</div>
+      <div class="row" style="margin-top:8px"><button class="small" id="btnDemo">Demo (sample chatter)</button></div>
+    </div>
+
+    <div class="card">
+      <h2>Cut</h2>
+      <div class="grid">
+        <label>Tool<select id="toolSel"></select></label>
+        <label>Spindle RPM<input id="rpm" inputmode="decimal"></label>
+        <label>Flutes<input id="z" inputmode="numeric"></label>
+        <label>Feed (IPM)<input id="feed" inputmode="decimal"></label>
+        <label>Machine max RPM<input id="maxrpm" inputmode="decimal"></label>
+        <label>Machine min RPM<input id="minrpm" inputmode="decimal"></label>
+      </div>
+      <div class="kv" style="margin-top:10px">
+        <span>Tooth-pass</span><b id="ftp">—</b>
+        <span>Spindle rev</span><b id="frev">—</b>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Chatter fix</h2>
+      <div class="grid" style="margin-bottom:10px">
+        <label>Chatter frequency (Hz)<input id="fch" inputmode="decimal" placeholder="tap a peak or type"></label>
+      </div>
+      <div id="verdict" class="verdict v-none">Pick a peak or type a frequency.</div>
+      <div class="kv" id="ratioBox" style="margin-bottom:8px">
+        <span>Chatter ÷ tooth-pass</span><b id="ratio">—</b>
+      </div>
+      <div class="scroll">
+        <table class="sugg" id="sugg"><thead><tr><th>Try</th><th>RPM</th><th>Feed</th><th>Lobe</th></tr></thead><tbody></tbody></table>
+      </div>
+      <p class="hint">Same chip load at every RPM. Try the first one; if a smaller chatter peak is left, try the next.</p>
+      <div class="grid" style="margin-top:6px">
+        <label>Note<input id="note" placeholder="e.g. pocket wall, 1.0 out"></label>
+        <label>Result<select id="result"><option>Not tried yet</option><option>Fixed it</option><option>Better</option><option>No change</option><option>Worse</option></select></label>
+      </div>
+      <div class="row" style="margin-top:8px"><button id="btnSave">Save reading to log</button></div>
+      <div class="msg" id="saveMsg" hidden></div>
+    </div>
+
+    <details class="card">
+      <summary>How to use it</summary>
+      <ol>
+        <li>Pick the tool and enter the RPM, flutes and feed that are running.</li>
+        <li>Optional: with the spindle running at that RPM but not cutting, tap <b>Listen</b>, then <b>Save baseline</b>. Peaks that show up there get tagged as machine noise.</li>
+        <li>Tap <b>Reset hold</b>, then listen while it chatters. Peak hold keeps the highest level at each frequency, so short bursts still show.</li>
+        <li>The tallest peak tagged <span class="tag t-ch">CHATTER</span> is the one to fix. Tap it.</li>
+        <li>A peak on a whole multiple of tooth-pass is each flute hitting (normal, or forced vibration if it's loud). Changing RPM doesn't fix forced vibration; stiffen the setup or lighten the cut.</li>
+        <li>Try the suggested RPM with the spindle override, then save the reading with the result.</li>
+      </ol>
+      <p>Phone mics are good to about 15–20 kHz; most chatter is between 500 and 5,000 Hz. Keep the phone out of the coolant and close to the window or door.</p>
+    </details>
+  </section>
+
+  <!-- ===================== TOOLS ===================== -->
+  <section id="v-tools" class="wrap" hidden>
+    <div class="card">
+      <h2>Tools</h2>
+      <div class="scroll"><table id="toolTbl"><thead><tr><th>Name</th><th>Fl</th><th>RPM</th><th>Feed</th><th>Max</th><th></th></tr></thead><tbody></tbody></table></div>
+      <p class="hint">Saved on this phone in this browser.</p>
+    </div>
+    <div class="card">
+      <h2 id="toolFormTitle">Add tool</h2>
+      <div class="grid">
+        <label style="grid-column:1/-1">Name<input id="tName" placeholder="T52 1.0 3FL 3.6 out"></label>
+        <label>Flutes<input id="tZ" inputmode="numeric"></label>
+        <label>Usual RPM<input id="tRpm" inputmode="decimal"></label>
+        <label>Usual feed (IPM)<input id="tFeed" inputmode="decimal"></label>
+        <label>Machine max RPM<input id="tMax" inputmode="decimal"></label>
+        <label>Machine min RPM<input id="tMin" inputmode="decimal"></label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="primary" id="tSave">Save tool</button>
+        <button id="tCancel">Clear</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== LOG ===================== -->
+  <section id="v-log" class="wrap" hidden>
+    <div class="card">
+      <h2>Readings</h2>
+      <div class="scroll"><table id="logTbl"><thead><tr><th>When</th><th>Tool</th><th>RPM</th><th>Chatter</th><th>Try</th><th>Result</th><th></th></tr></thead><tbody></tbody></table></div>
+      <div class="msg" id="logEmpty">No readings yet. Save one from the Listen tab.</div>
+      <div class="row" style="margin-top:10px">
+        <button id="btnCsv">Download CSV</button>
+        <button id="btnCopy">Copy as text</button>
+        <button id="btnClear">Clear log</button>
+      </div>
+      <div class="msg" id="logMsg" hidden></div>
+    </div>
+  </section>
+</div>
+
+<nav class="tabs">
+  <button class="on" data-v="listen">Listen</button>
+  <button data-v="tools">Tools</button>
+  <button data-v="log">Log</button>
+</nav>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------- storage
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); return true; }catch(e){ return false; } }
+};
+const SEED_TOOLS = [
+  {name:'1.0" 3FL carbide, 2.5" out (example)', z:3, rpm:13050, feed:384, max:15000, min:200},
+  {name:'2.0" 4-insert shoulder mill (example)', z:4, rpm:11000, feed:400, max:15000, min:200},
+  {name:'1.0" 5FL KOR5, long holder (example)', z:5, rpm:15000, feed:850, max:15000, min:200},
+];
+let tools = LS.get("cc_tools", null) || SEED_TOOLS.slice();
+let log = LS.get("cc_log", []);
+const saveTools = () => LS.set("cc_tools", tools);
+const saveLog = () => LS.set("cc_log", log);
+
+const $ = id => document.getElementById(id);
+const num = id => { const v = parseFloat(($(id).value || "").replace(/,/g, "")); return isFinite(v) ? v : null; };
+const fmt = (v, d=0) => v == null || !isFinite(v) ? "—" : v.toLocaleString("en-US", {minimumFractionDigits:d, maximumFractionDigits:d});
+
+// ---------------------------------------------------------------- audio
+const FFT = 16384;
+let ctx = null, analyser = null, stream = null, live = null, hold = null, base = null;
+let sr = 48000, binHz = sr / FFT, running = false, frozen = false, holdOn = true, demo = false;
+let maxF = 5000, peaks = [], selPeak = null, wake = null;
+
+async function startMic(){
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false, noiseSuppression:false, autoGainControl:false}});
+  }catch(e){
+    showErr(location.protocol === "http:" ?
+      "The browser only allows the mic on https pages. Open this page from an https address." :
+      "Couldn't get the microphone. Allow mic access for this page in the browser's site settings, then tap Listen again.");
+    return;
+  }
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  sr = ctx.sampleRate; binHz = sr / FFT;
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = FFT;
+  analyser.smoothingTimeConstant = 0.5;
+  analyser.minDecibels = -130; analyser.maxDecibels = 0;
+  ctx.createMediaStreamSource(stream).connect(analyser);
+  live = new Float32Array(analyser.frequencyBinCount);
+  if (!hold || hold.length !== live.length) hold = new Float32Array(live.length).fill(-200);
+  running = true; frozen = false; demo = false;
+  $("btnListen").textContent = "Stop"; $("btnListen").classList.add("stop");
+  $("btnFreeze").disabled = false; $("btnFreeze").textContent = "Freeze";
+  $("status").textContent = `listening · ${fmt(sr)} Hz · ${binHz.toFixed(1)} Hz/bin`; $("status").classList.add("live");
+  try{ wake = await navigator.wakeLock.request("screen"); }catch(e){}
+  requestAnimationFrame(loop);
+}
+function stopMic(){
+  running = false;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  if (ctx) ctx.close();
+  stream = ctx = analyser = null;
+  try{ wake && wake.release(); }catch(e){} wake = null;
+  $("btnListen").textContent = "Listen"; $("btnListen").classList.remove("stop");
+  $("btnFreeze").disabled = true;
+  $("status").textContent = "mic off"; $("status").classList.remove("live");
+}
+let lastPeakT = 0;
+function loop(t){
+  if (!running) return;
+  if (!frozen){
+    analyser.getFloatFrequencyData(live);
+    for (let i = 0; i < live.length; i++) if (live[i] > hold[i]) hold[i] = live[i];
+    if (t - lastPeakT > 400){ findPeaks(); lastPeakT = t; }
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// ---------------------------------------------------------------- demo spectrum
+function makeDemo(){
+  // 1.0" 3FL at 13,050 RPM chattering at ~2,400 Hz
+  sr = 48000; binHz = sr / FFT;
+  const n = FFT / 2; live = new Float32Array(n); hold = new Float32Array(n);
+  const rpm = num("rpm") || 13050, z = num("z") || 3, ftp = rpm * z / 60;
+  const bump = (f, w, a) => i => { const d = (i * binHz - f) / w; return a * Math.exp(-d * d); };
+  const parts = [];
+  for (let k = 1; k <= 8; k++) parts.push(bump(ftp * k, 4, 34 - 4 * k));
+  parts.push(bump(rpm / 60, 3, 18));
+  parts.push(bump(2400, 6, 44)); parts.push(bump(4800, 6, 20));
+  parts.push(bump(120, 2, 22)); // electrical hum, also in the baseline
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < n; i++){
+    const f = i * binHz;
+    let v = -105 - 10 * Math.log10(1 + f / 2000) + rnd() * 6;
+    let add = 0; for (const p of parts) add = Math.max(add, p(i));
+    live[i] = hold[i] = v + add;
+  }
+  base = new Float32Array(n);
+  for (let i = 0; i < n; i++){ const f = i * binHz; base[i] = -105 - 10 * Math.log10(1 + f / 2000) + 3 + Math.max(bump(120, 2, 22)(i), bump(rpm / 60, 3, 16)(i)); }
+  $("baseInfo").textContent = "Demo baseline loaded (spindle running, not cutting).";
+}
+
+// ---------------------------------------------------------------- peaks
+function findPeaks(){
+  const src = holdOn ? hold : live;
+  if (!src) return;
+  const i0 = Math.max(3, Math.floor(60 / binHz)), i1 = Math.min(src.length - 4, Math.floor(maxF / binHz));
+  // noise floor: running median over a wide window, approximated with a 1/8-octave-ish moving minimum + offset
+  const win = Math.max(20, Math.round(150 / binHz));
+  const found = [];
+  for (let i = i0; i < i1; i++){
+    const v = src[i];
+    if (v < -125) continue;
+    let isMax = true;
+    for (let k = 1; k <= 3; k++) if (src[i - k] > v || src[i + k] >= v){ isMax = false; break; }
+    if (!isMax) continue;
+    // floor = 20th percentile in the window
+    const a = Math.max(0, i - win), b = Math.min(src.length - 1, i + win);
+    const tmp = []; for (let j = a; j <= b; j += 2) tmp.push(src[j]);
+    tmp.sort((x, y) => x - y);
+    const floor = tmp[Math.floor(tmp.length * 0.2)];
+    const prom = v - floor;
+    if (prom < 12) continue;
+    const y0 = src[i - 1], y1 = v, y2 = src[i + 1];
+    const den = y0 - 2 * y1 + y2;
+    const p = den !== 0 ? 0.5 * (y0 - y2) / den : 0;
+    found.push({f:(i + p) * binHz, db:v, prom, i});
+  }
+  found.sort((x, y) => y.db - x.db);
+  const out = [];
+  for (const pk of found){
+    if (out.some(o => Math.abs(o.f - pk.f) < Math.max(3 * binHz, 0.01 * pk.f))) continue;
+    out.push(pk); if (out.length >= 8) break;
+  }
+  peaks = out.map(classify);
+  renderPeaks();
+}
+function classify(pk){
+  const rpm = num("rpm"), z = num("z");
+  const tol = f => Math.max(2.5 * binHz, 0.015 * f);
+  pk.kind = "ch"; pk.label = "CHATTER?"; pk.ratio = null;
+  if (base && base[pk.i] >= pk.db - 6){ pk.kind = "bl"; pk.label = "machine noise"; }
+  if (rpm && z){
+    const ftp = rpm * z / 60, frev = rpm / 60;
+    pk.ratio = pk.f / ftp;
+    const n = Math.round(pk.ratio);
+    if (n >= 1 && Math.abs(pk.f - n * ftp) <= tol(pk.f)){ pk.kind = "tp"; pk.label = `tooth-pass ×${n}`; }
+    else if (pk.kind === "ch"){
+      const k = Math.round(pk.f / frev);
+      if (k >= 1 && k <= 8 && Math.abs(pk.f - k * frev) <= Math.max(2 * binHz, 0.006 * pk.f)){ pk.kind = "sp"; pk.label = `spindle ×${k}`; }
+    }
+  }
+  return pk;
+}
+const TAG = {ch:"t-ch", tp:"t-tp", sp:"t-sp", bl:"t-bl"};
+function renderPeaks(){
+  const tb = $("peaks").tBodies[0]; tb.textContent = "";
+  for (const pk of peaks){
+    const tr = document.createElement("tr"); tr.className = "pk" + (selPeak && Math.abs(selPeak - pk.f) < 1 ? " sel" : "");
+    tr.innerHTML = `<td class="num">${fmt(pk.f)}</td><td class="num">${pk.db.toFixed(0)}</td><td class="num">${pk.ratio ? pk.ratio.toFixed(2) : "—"}</td><td><span class="tag ${TAG[pk.kind]}"></span></td>`;
+    tr.querySelector(".tag").textContent = pk.kind === "ch" ? "CHATTER" : pk.label.toUpperCase();
+    tr.onclick = () => { selPeak = pk.f; $("fch").value = Math.round(pk.f); renderPeaks(); calcFix(); };
+    tb.appendChild(tr);
+  }
+  const ch = peaks.filter(p => p.kind === "ch");
+  const m = $("peakMsg");
+  if (!peaks.length){ m.hidden = false; m.textContent = running ? "Listening… no clear peaks yet." : m.textContent; }
+  else if (!num("rpm") || !num("z")){ m.hidden = false; m.textContent = "Enter RPM and flutes to sort chatter from tooth-pass peaks."; }
+  else if (!ch.length){ m.hidden = false; m.textContent = "No chatter peaks. Everything lines up with tooth-pass, spindle or baseline noise: the cut looks stable."; }
+  else { m.hidden = false; m.textContent = `Strongest chatter peak: ${fmt(ch[0].f)} Hz. Tap it to get RPMs to try.`; }
+  // auto-pick the strongest chatter peak if nothing chosen yet
+  if (!selPeak && ch.length && !$("fch").value){ $("fch").value = Math.round(ch[0].f); calcFix(); }
+}
+
+// ---------------------------------------------------------------- drawing
+const cv = $("spec"), g = cv.getContext("2d");
+function draw(){
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)){ cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+  const L = 34, R = 8, T = 8, B = 20, pw = W - L - R, ph = H - T - B;
+  const css = getComputedStyle(document.documentElement);
+  const col = n => css.getPropertyValue(n).trim();
+  // y scale from data
+  let top = -30;
+  const src = hold || live;
+  if (src){ let m = -200; const i1 = Math.min(src.length, Math.floor(maxF / binHz)); for (let i = 2; i < i1; i++) if (src[i] > m) m = src[i]; top = Math.min(0, Math.ceil((m + 6) / 10) * 10); }
+  const bot = top - 80;
+  const X = f => L + f / maxF * pw, Y = d => T + (top - Math.max(bot, Math.min(top, d))) / (top - bot) * ph;
+  // grid
+  g.strokeStyle = col("--line"); g.lineWidth = 1; g.fillStyle = col("--muted"); g.font = "10px " + col("--mono");
+  g.textAlign = "right"; g.textBaseline = "middle";
+  for (let d = top; d >= bot; d -= 20){ const y = Y(d); g.beginPath(); g.moveTo(L, y); g.lineTo(L + pw, y); g.stroke(); g.fillText(d, L - 4, y); }
+  const step = maxF <= 2000 ? 250 : maxF <= 5000 ? 500 : maxF <= 10000 ? 1000 : 2500;
+  g.textAlign = "center"; g.textBaseline = "top";
+  for (let f = 0; f <= maxF; f += step){ const x = X(f); g.beginPath(); g.moveTo(x, T); g.lineTo(x, T + ph); g.stroke();
+    g.fillText(f >= 1000 ? (f / 1000) + "k" : f, Math.min(Math.max(x, L + 8), L + pw - 8), T + ph + 4); }
+  // tooth-pass lines
+  const rpm = num("rpm"), z = num("z");
+  if (rpm && z){
+    const ftp = rpm * z / 60; g.strokeStyle = col("--tp"); g.setLineDash([4, 4]);
+    for (let k = 1; k * ftp <= maxF; k++){ const x = X(k * ftp); g.beginPath(); g.moveTo(x, T); g.lineTo(x, T + ph); g.stroke(); }
+    g.setLineDash([]);
+  }
+  if (!src){
+    g.fillStyle = col("--muted"); g.textAlign = "center"; g.textBaseline = "middle"; g.font = "13px " + col("--sans");
+    g.fillText("Tap Listen to start, or Demo to see a sample", L + pw / 2, T + ph / 2); return;
+  }
+  const i1 = Math.min(src.length - 1, Math.ceil(maxF / binHz));
+  const trace = (arr, stroke, fill) => {
+    g.beginPath(); g.moveTo(X(0), Y(arr[0]));
+    // decimate to ~2 points per pixel using max in each bucket
+    const per = Math.max(1, Math.floor(i1 / (pw * 2)));
+    for (let i = 0; i <= i1; i += per){ let m = -200; for (let j = i; j < i + per && j <= i1; j++) if (arr[j] > m) m = arr[j]; g.lineTo(X(i * binHz), Y(m)); }
+    if (fill){ g.lineTo(X(i1 * binHz), T + ph); g.lineTo(X(0), T + ph); g.closePath(); g.fillStyle = fill; g.fill(); }
+    else { g.strokeStyle = stroke; g.lineWidth = 1.3; g.stroke(); }
+  };
+  if (base){ g.globalAlpha = .5; trace(base, col("--muted")); g.globalAlpha = 1; }
+  if (holdOn && hold) trace(hold, null, "rgba(70,208,192,.22)");
+  if (live) trace(live, col("--trace"));
+  // peak markers
+  for (const pk of peaks){
+    if (pk.f > maxF) continue;
+    const x = X(pk.f), y = Y(pk.db);
+    g.fillStyle = pk.kind === "ch" ? col("--bad") : pk.kind === "tp" ? col("--tp") : col("--muted");
+    g.beginPath(); g.moveTo(x, y - 3); g.lineTo(x - 5, y - 11); g.lineTo(x + 5, y - 11); g.closePath(); g.fill();
+    if (selPeak && Math.abs(selPeak - pk.f) < 1){ g.strokeStyle = col("--accent"); g.lineWidth = 2; g.strokeRect(x - 7, y - 13, 14, 12); }
+  }
+}
+// tap on the chart picks the nearest peak
+cv.addEventListener("click", e => {
+  const r = cv.getBoundingClientRect(), L = 34, pw = r.width - L - 8;
+  const f = (e.clientX - r.left - L) / pw * maxF;
+  let best = null; for (const pk of peaks) if (!best || Math.abs(pk.f - f) < Math.abs(best.f - f)) best = pk;
+  if (best && Math.abs(best.f - f) < maxF * 0.04){ selPeak = best.f; $("fch").value = Math.round(best.f); renderPeaks(); calcFix(); draw(); }
+});
+
+// ---------------------------------------------------------------- chatter fix (same math as CNC Shop Calculator)
+function chatterRpms(fHz, z, rpm, mx, mn){
+  const ftp = rpm * z / 60, ratio = fHz / ftp, out = [];
+  const n0 = Math.max(1, Math.floor(ratio));
+  const ns = [n0, n0 - 1, n0 + 1, n0 + 2].filter(n => n >= 1);
+  for (const n of ns){
+    const r = 60 * fHz / (z * n);
+    if (r >= (mn || 0) && r <= (mx || 1e9) && Math.abs(r - rpm) > 0.005 * rpm) out.push({rpm:r, n});
+  }
+  const forced = Math.abs(ratio - Math.round(ratio)) < 0.03 && Math.round(ratio) >= 1;
+  return {ftp, ratio, out, forced};
+}
+let lastFix = null;
+function calcFix(){
+  const rpm = num("rpm"), z = num("z"), f = num("fch"), feed = num("feed");
+  $("ftp").textContent = rpm && z ? `${fmt(rpm * z / 60)} Hz` : "—";
+  $("frev").textContent = rpm ? `${fmt(rpm / 60, 1)} Hz` : "—";
+  const v = $("verdict"), tb = $("sugg").tBodies[0]; tb.textContent = ""; lastFix = null;
+  if (!rpm || !z){ v.className = "verdict v-none"; v.textContent = "Enter RPM and flutes."; $("ratio").textContent = "—"; return; }
+  if (!f){ v.className = "verdict v-none"; v.textContent = "Pick a peak or type a frequency."; $("ratio").textContent = "—"; return; }
+  const r = chatterRpms(f, z, rpm, num("maxrpm"), num("minrpm"));
+  $("ratio").textContent = r.ratio.toFixed(2);
+  lastFix = {f, ratio:r.ratio, forced:r.forced, first:r.out[0] || null};
+  if (r.forced){
+    v.className = "verdict v-warn";
+    v.textContent = `Forced vibration: ${fmt(f)} Hz is ${Math.round(r.ratio)}× tooth-pass. Changing RPM won't fix it. Stiffen the setup, shorten the tool or lighten the engagement.`;
+  } else if (!r.out.length){
+    v.className = "verdict v-warn"; v.textContent = "No stable RPMs for that frequency inside the machine's RPM range.";
+  } else {
+    v.className = "verdict v-bad"; v.textContent = `Chatter at ${fmt(f)} Hz. Try S${fmt(r.out[0].rpm)} first.`;
+  }
+  r.out.forEach((o, i) => {
+    const tr = document.createElement("tr");
+    const fd = feed ? feed * o.rpm / rpm : null;
+    tr.innerHTML = `<td>${(i === 0 ? "First · " : "") + (o.rpm > rpm ? "faster" : "slower")}</td><td class="num">S${fmt(o.rpm)}</td><td class="num">${fd ? "F" + fmt(fd, 1) : "—"}</td><td class="num">${o.n}</td>`;
+    tb.appendChild(tr);
+  });
+}
+
+// ---------------------------------------------------------------- tools
+function fillToolSel(){
+  const s = $("toolSel"), cur = s.value; s.textContent = "";
+  const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "— none (type values) —"; s.appendChild(o0);
+  tools.forEach((t, i) => { const o = document.createElement("option"); o.value = i; o.textContent = t.name; s.appendChild(o); });
+  if (cur !== "" && tools[cur]) s.value = cur;
+}
+function useTool(i){
+  const t = tools[i]; if (!t) return;
+  $("rpm").value = t.rpm || ""; $("z").value = t.z || ""; $("feed").value = t.feed || "";
+  $("maxrpm").value = t.max || ""; $("minrpm").value = t.min || "";
+  LS.set("cc_lastTool", i); refresh();
+}
+let editIdx = null;
+function renderTools(){
+  const tb = $("toolTbl").tBodies[0]; tb.textContent = "";
+  tools.forEach((t, i) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td></td><td class="num">${t.z}</td><td class="num">${fmt(t.rpm)}</td><td class="num">${fmt(t.feed)}</td><td class="num">${fmt(t.max)}</td><td style="white-space:nowrap"><button class="small">Edit</button> <button class="small">Delete</button></td>`;
+    tr.cells[0].textContent = t.name;
+    const [be, bd] = tr.querySelectorAll("button");
+    be.onclick = () => { editIdx = i; $("toolFormTitle").textContent = "Edit tool"; $("tName").value = t.name; $("tZ").value = t.z; $("tRpm").value = t.rpm || ""; $("tFeed").value = t.feed || ""; $("tMax").value = t.max || ""; $("tMin").value = t.min || ""; $("tName").focus(); };
+    bd.onclick = () => {
+      if (bd.dataset.confirm){ tools.splice(i, 1); saveTools(); renderTools(); fillToolSel(); }
+      else { bd.dataset.confirm = 1; bd.textContent = "Tap again"; setTimeout(() => { bd.textContent = "Delete"; delete bd.dataset.confirm; }, 3000); }
+    };
+    tb.appendChild(tr);
+  });
+}
+function clearToolForm(){ editIdx = null; $("toolFormTitle").textContent = "Add tool"; ["tName","tZ","tRpm","tFeed","tMax","tMin"].forEach(id => $(id).value = ""); }
+$("tSave").onclick = () => {
+  const t = {name:$("tName").value.trim(), z:num("tZ"), rpm:num("tRpm"), feed:num("tFeed"), max:num("tMax"), min:num("tMin")};
+  if (!t.name || !t.z){ $("tName").placeholder = "Name and flutes are needed"; ($("tName").value ? $("tZ") : $("tName")).focus(); return; }
+  if (editIdx != null) tools[editIdx] = t; else tools.push(t);
+  saveTools(); clearToolForm(); renderTools(); fillToolSel();
+};
+$("tCancel").onclick = clearToolForm;
+$("toolSel").onchange = e => { if (e.target.value !== "") useTool(+e.target.value); };
+
+// ---------------------------------------------------------------- log
+function renderLog(){
+  const tb = $("logTbl").tBodies[0]; tb.textContent = "";
+  $("logEmpty").hidden = log.length > 0;
+  log.slice().reverse().forEach((r, k) => {
+    const i = log.length - 1 - k;
+    const tr = document.createElement("tr");
+    const d = new Date(r.t);
+    tr.innerHTML = `<td class="num">${d.toLocaleDateString(undefined,{month:"numeric",day:"numeric"})} ${d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})}</td><td></td><td class="num">${fmt(r.rpm)}</td><td class="num">${fmt(r.f)}</td><td class="num">${r.forced ? "forced" : r.tryRpm ? "S" + fmt(r.tryRpm) : "—"}</td><td></td><td><button class="small">✕</button></td>`;
+    tr.cells[1].textContent = r.tool + (r.note ? " · " + r.note : "");
+    tr.cells[5].textContent = r.result;
+    const b = tr.querySelector("button"); b.setAttribute("aria-label", "Delete reading");
+    b.onclick = () => { if (b.dataset.c){ log.splice(i, 1); saveLog(); renderLog(); } else { b.dataset.c = 1; b.textContent = "Delete?"; setTimeout(() => { b.textContent = "✕"; delete b.dataset.c; }, 3000); } };
+    tb.appendChild(tr);
+  });
+}
+$("btnSave").onclick = () => {
+  const m = $("saveMsg"); m.hidden = false; m.className = "msg";
+  if (!lastFix){ m.textContent = "Pick a chatter frequency first."; m.classList.add("err"); return; }
+  const ti = $("toolSel").value;
+  log.push({t:Date.now(), tool: ti !== "" && tools[ti] ? tools[ti].name : "(no tool)", rpm:num("rpm"), z:num("z"), feed:num("feed"),
+            f:Math.round(lastFix.f), ratio:+lastFix.ratio.toFixed(3), forced:lastFix.forced,
+            tryRpm:lastFix.first ? Math.round(lastFix.first.rpm) : null, note:$("note").value.trim(), result:$("result").value});
+  m.textContent = saveLog() ? "Saved to the log." : "Saved for now, but this browser is blocking storage, so it will be gone when the page closes.";
+  renderLog();
+};
+const CSV_HEAD = ["date","tool","rpm","flutes","feed_ipm","chatter_hz","ratio","forced","try_rpm","result","note"];
+const csvRows = () => log.map(r => [new Date(r.t).toISOString(), r.tool, r.rpm, r.z, r.feed, r.f, r.ratio, r.forced ? "yes" : "no", r.tryRpm || "", r.result, r.note]);
+const csvEsc = v => { v = v == null ? "" : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+$("btnCsv").onclick = () => {
+  const text = [CSV_HEAD, ...csvRows()].map(r => r.map(csvEsc).join(",")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], {type:"text/csv"}));
+  a.download = "chatter_log.csv"; document.body.appendChild(a); a.click(); a.remove();
+};
+$("btnCopy").onclick = async () => {
+  const text = [CSV_HEAD, ...csvRows()].map(r => r.map(csvEsc).join(",")).join("\n");
+  const m = $("logMsg"); m.hidden = false;
+  try{ await navigator.clipboard.writeText(text); m.textContent = "Copied. Paste it into an email or a spreadsheet."; }
+  catch(e){ m.textContent = "This browser blocked copying. Use Download CSV instead."; }
+};
+$("btnClear").onclick = e => {
+  const b = e.target;
+  if (b.dataset.c){ log = []; saveLog(); renderLog(); b.textContent = "Clear log"; delete b.dataset.c; }
+  else { b.dataset.c = 1; b.textContent = "Tap again to clear all"; setTimeout(() => { b.textContent = "Clear log"; delete b.dataset.c; }, 3000); }
+};
+
+// ---------------------------------------------------------------- buttons
+function showErr(t){ const m = $("peakMsg"); m.hidden = false; m.className = "msg err"; m.textContent = t; }
+$("btnListen").onclick = () => running ? stopMic() : startMic();
+$("btnFreeze").onclick = () => { frozen = !frozen; $("btnFreeze").textContent = frozen ? "Resume" : "Freeze"; $("btnFreeze").classList.toggle("on", frozen); };
+$("btnReset").onclick = () => { if (hold) hold.fill(-200); if (demo){ hold = null; live = null; demo = false; } peaks = []; selPeak = null; $("fch").value = ""; renderPeaks(); calcFix(); draw(); };
+$("btnHold").onclick = () => { holdOn = !holdOn; $("btnHold").classList.toggle("on", holdOn); findPeaks(); draw(); };
+$("btnBase").onclick = () => {
+  if (!running || !live){ $("baseInfo").textContent = "Start listening with the spindle running (not cutting), then tap Save baseline."; return; }
+  base = Float32Array.from(live);
+  $("baseInfo").textContent = `Baseline saved at ${new Date().toLocaleTimeString()}. Grey line; peaks inside it are tagged machine noise.`;
+};
+$("btnDemo").onclick = () => {
+  if (running) stopMic();
+  if (!num("rpm")) useTool(0);
+  demo = true; makeDemo(); selPeak = null; $("fch").value = ""; findPeaks(); draw();
+  $("status").textContent = "demo · not the microphone";
+};
+document.querySelectorAll("#range .chip").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#range .chip").forEach(x => x.classList.toggle("on", x === b));
+  maxF = +b.dataset.r; findPeaks(); draw();
+});
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("on", x === b));
+  ["listen","tools","log"].forEach(v => $("v-" + v).hidden = v !== b.dataset.v);
+  window.scrollTo(0, 0);
+});
+function refresh(){ if (peaks.length){ peaks = peaks.map(classify); renderPeaks(); } calcFix(); draw(); }
+["rpm","z","feed","maxrpm","minrpm","fch"].forEach(id => $(id).addEventListener("input", () => { if (id === "fch") selPeak = null; refresh(); }));
+window.addEventListener("resize", draw);
+document.addEventListener("visibilitychange", async () => { if (running && document.visibilityState === "visible"){ try{ wake = await navigator.wakeLock.request("screen"); }catch(e){} } });
+
+// ---------------------------------------------------------------- start
+fillToolSel(); renderTools(); renderLog();
+const last = LS.get("cc_lastTool", 0);
+if (tools[last]){ $("toolSel").value = last; useTool(last); } else refresh();
+if (!window.isSecureContext) showErr("This page isn't on a secure (https) address, so the browser won't allow the microphone. Demo still works.");
+</script>
+</body>
+</html>

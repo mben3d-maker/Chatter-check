@@ -1,0 +1,56 @@
+CHATTER CHECK - QUICK HOW-TO
+============================
+Finds chatter by sound and tells you which spindle speed (RPM) to try.
+Works on any phone, tablet or PC with Chrome and a microphone.
+
+OPEN IT
+  Chrome -> https://YOUR-USERNAME.github.io/chatter/chatter_check.html
+  Save it: Chrome menu (3 dots) -> Add to Home screen.
+  First time you tap Listen: choose ALLOW for the microphone.
+
+ONE-TIME SETUP (Tools tab)
+  Add each tool: name, flutes, usual RPM, feed (IPM),
+  and the MACHINE's max and min RPM.
+  Tools and readings save on this phone only.
+
+AT THE MACHINE
+  1. Listen tab -> pick the tool in "Cut". Check the RPM, flutes and feed.
+     Use the RPM that is ACTUALLY running (include spindle override).
+  2. Baseline (optional but recommended):
+     Spindle running at cut RPM, NOT cutting -> Listen -> Save baseline.
+  3. Tap Reset hold right before the tool enters the cut.
+  4. Listen during the cut. Hold the phone near the door or window,
+     out of the coolant.
+  5. Tap Stop or Freeze when you have a good reading.
+
+READING THE GRAPH
+  Range buttons (2k/5k/10k/20k) only zoom the graph. Start on 5 kHz.
+  Blue dashed lines = tooth-pass (each flute hitting). Normal.
+
+  Peak labels:
+    CHATTER          -> the problem. Tap it.
+    TOOTH-PASS xN    -> flutes hitting. Normal.
+    SPINDLE xN       -> spindle runout / balance.
+    MACHINE NOISE    -> also in the baseline. Ignore.
+
+FIXING IT (Chatter fix box)
+  Tapping a CHATTER peak fills in the frequency.
+  Try the "First" RPM using spindle override.
+  The feed shown keeps the same chip load.
+  Still a smaller chatter peak? Try the next RPM in the list.
+
+  "FORCED VIBRATION" means changing RPM won't help.
+  Stiffen the setup, shorten the tool or holder, or lighten the cut.
+
+  Then: add a note, pick the Result -> Save reading to log.
+
+LOG TAB
+  All saved readings. Download CSV or Copy as text to email them.
+
+TIPS
+  - Most chatter is between 500 and 5,000 Hz. Long tools run lower.
+  - Change RPM before you slow the feed. Slowing the feed alone
+    often doesn't stop chatter.
+  - Put the RPM that worked into the program, and save it as a
+    proven cut in CNC Shop Calculator.
+  - Demo button = sample reading, for practice.
